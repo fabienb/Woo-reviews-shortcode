@@ -1,7 +1,8 @@
 # woo-reviews-shortcode
 
 I had an issue with Woocommerce and the configuration of the theme I was using (Ohio by Colabrio, via Themeforest) that somehow prevented Customer Reviews from appearing in Products.
-I tried the Booster plugin to create additional custom tabs, and I thought I would retrieve the reviews from the database and then create a shortcode to display those reviews in such tabs. 
+I decided to retrieve the reviews from the database and then create a shortcode to display those reviews in a custom tab. 
+
 This is the PHP that creates such shortcode. 
 
 If this is helpful to you, please consider donating via [Paypal](https://paypal.me/fabienbutazzi) to support this work and future enhancements. Thanks!
