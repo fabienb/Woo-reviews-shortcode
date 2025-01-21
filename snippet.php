@@ -313,51 +313,55 @@ function custom_review_form_shortcode($atts) {
 			</p>
 		</form>
 	</div>
-
-	<style>
-		.woocommerce-review-form-wrapper {
-			max-width: 800px;
-			margin: 2em 0;
-			padding: 20px;
-			background: #f8f8f8;
-			border-radius: 4px;
-		}
-		.comment-form-rating {
-			margin: 1em 0;
-		}
-		.comment-form-rating select {
-			display: block;
-			margin-top: 5px;
-		}
-		.comment-form-comment textarea {
-			width: 100%;
-			margin-top: 5px;
-		}
-		.required {
-			color: red;
-		}
-		.form-submit {
-			margin-top: 1em;
-		}
-		.submit.button {
-			background: #2c2d33;
-			color: #fff;
-			padding: 10px 20px;
-			border: none;
-			border-radius: 3px;
-			cursor: pointer;
-		}
-		.submit.button:hover {
-			background: #3e4046;
-		}
-	</style>
 	<?php
-
 	// Add the form handling
 	add_action('init', 'handle_review_submission');
-
-	return ob_get_clean();
+	add_form_styling();
+    return ob_get_clean();
 }
+
+function add_form_styling() {
+	?>
+	<style>
+	.woocommerce-review-form-wrapper {
+		max-width: 800px;
+		margin: 2em 0;
+		padding: 20px;
+		background: #f8f8f8;
+		border-radius: 4px;
+	}
+	.comment-form-rating {
+		margin: 1em 0;
+	}
+	.comment-form-rating select {
+		display: block;
+		margin-top: 5px;
+	}
+	.comment-form-comment textarea {
+		width: 100%;
+		margin-top: 5px;
+	}
+	.required {
+		color: red;
+	}
+	.form-submit {
+		margin-top: 1em;
+	}
+	.submit.button {
+		background: #2c2d33;
+		color: #fff;
+		padding: 10px 20px;
+		border: none;
+		border-radius: 3px;
+		cursor: pointer;
+	}
+	.submit.button:hover {
+		background: #3e4046;
+	}
+	</style>
+	<?php
+}
+
 
 /**
  * Handle the review form submission
