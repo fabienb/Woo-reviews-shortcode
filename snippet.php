@@ -1,10 +1,10 @@
-/**
- * Version: 1.1.2
+/*
+*
+ * Version: 1.1.3
  * Author: Fabien Butazzi (@fabienb)
  * Author URI: https://fabienb.blog
  * Add this code to your theme's functions.php or a custom plugin file or snippets plugin
  */
-
 
 if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly
@@ -13,204 +13,229 @@ if (!defined('ABSPATH')) {
 /**
  * Register the shortcode [product_reviews]
  */
-function custom_product_reviews_shortcode($atts) {
-	// Extract shortcode attributes
-	$atts = shortcode_atts(array(
-		'product_id' => get_the_ID(), // Default to current product ID
-		'number' => -1, // -1 means show all reviews
-	), $atts, 'product_reviews');
+function custom_product_reviews_shortcode() {
+    global $product;
+    global $wpdb;
 
-	// Start output buffering
-	ob_start();
+    if (!$product) {
+        return '';
+    }
 
-	// Get the product ID
-	$product_id = intval($atts['product_id']);
+    $product_id = $product->get_id();
 
-	// Verify this is a product page and get the product
-	$product = wc_get_product($product_id);
-	if (!$product) {
-		return '<p>Invalid product.</p>';
-	}
+    // Fetch reviews and replies directly from the database
+    $reviews = $wpdb->get_results($wpdb->prepare("
+        SELECT c.*
+        FROM $wpdb->comments c
+        WHERE c.comment_post_ID = %d
+        AND c.comment_approved = '1'
+        AND c.comment_type = 'review'
+        ORDER BY c.comment_date DESC
+    ", $product_id));
 
-	// Debug information for administrators
-	if (current_user_can('manage_options')) {
-		echo '<!-- Debug Info:' . "\n";
-		echo 'Product ID: ' . $product_id . "\n";
-		echo 'Review Count: ' . $product->get_review_count() . "\n";
-		echo 'Rating Count: ' . $product->get_rating_count() . "\n";
-		echo 'Average Rating: ' . $product->get_average_rating() . "\n";
-		echo '-->';
-	}
+    if (empty($reviews)) {
+        if (current_user_can('manage_options')) {
+            echo '<!-- No reviews found in direct database query -->';
+            echo '<!-- SQL Query: ' . esc_html($wpdb->last_query) . ' -->';
+        }
+        echo '<p>No reviews yet. Be the first to review this product!</p>';
+        return;
+    }
 
-	// Get all reviews and their replies from the database
-	global $wpdb;
-	$comments = $wpdb->get_results($wpdb->prepare("
-		SELECT * FROM $wpdb->comments
-		WHERE comment_post_ID = %d
-		AND (comment_type = 'review' OR comment_parent IN (
-			SELECT comment_ID FROM $wpdb->comments
-			WHERE comment_post_ID = %d
-			AND comment_type = 'review'
-		))
-		AND comment_approved = '1'
-		ORDER BY comment_parent ASC, comment_date_gmt DESC
-	", $product_id, $product_id));
+    ob_start();
+    ?>
+    <div class="product-reviews-wrapper">
+        <?php
+        // Display average rating and number of reviews
+        $average_rating = $product->get_average_rating();
+        echo '<h2 class="woocommerce-Reviews-title">Product Reviews</h2>';
+        if ($average_rating) {
+            echo '<div class="average-rating">';
+            echo wc_get_rating_html($average_rating);
+            echo '<span class="rating-text">' . sprintf(_n('(%s rating)', '(%s ratings)', $product->get_review_count(), 'woocommerce'), esc_html($product->get_review_count())) . '</span>';
+            echo '</div>';
+        }
 
-	if (!empty($comments)) {
-		echo '<div class="product-reviews-wrapper">';
+        // Display each review
+        foreach ($reviews as $review) {
+            $thread = get_thread_replies($wpdb, $review);
+            $rating = get_comment_meta($review->comment_ID, 'rating', true);
 
-		// Display average rating
-		$average_rating = $product->get_average_rating();
-		$review_count = $product->get_review_count();
+            echo '<div class="review-item">';
 
-		echo '<div class="average-rating">';
-		echo '<h3>Customer Reviews (' . $review_count . ')</h3>';
-		echo wc_get_rating_html($average_rating);
-		echo '<span class="rating-text">(' . $average_rating . ' out of 5)</span>';
-		echo '</div>';
+            // Render Review Header
+            render_review_header($review, $rating);
 
-		// Organize comments into parent-child structure
-		$review_threads = array();
-		foreach ($comments as $comment) {
-			if ($comment->comment_parent == 0) {
-				$review_threads[$comment->comment_ID] = array(
-					'review' => $comment,
-					'replies' => array()
-				);
-			} else {
-				if (isset($review_threads[$comment->comment_parent])) {
-					$review_threads[$comment->comment_parent]['replies'][] = $comment;
-				}
-			}
-		}
+            // Render Review Content
+            render_review_content($review->comment_content);
 
-		// Loop through each review thread
-		foreach ($review_threads as $thread) {
-			$review = $thread['review'];
-			$rating = get_comment_meta($review->comment_ID, 'rating', true);
+            // Display replies if any exist
+            if (!empty($thread['replies'])) {
+                echo '<div class="review-replies">';
+                foreach ($thread['replies'] as $reply) {
+                    echo '<div class="review-reply">';
 
-			echo '<div class="review-item">';
+                    // Render Reply Header
+                    render_reply_header($reply);
 
-			// Review header
-			echo '<div class="review-header">';
-			if ($rating) {
-				echo wc_get_rating_html($rating);
-			}
-			echo '<strong class="review-author">' . esc_html($review->comment_author) . '</strong>';
-			echo '<span class="review-date">' . esc_html(human_time_diff(strtotime($review->comment_date))) . ' ago</span>';
-			echo '</div>';
+                    // Render Reply Content
+                    render_reply_content($reply->comment_content);
 
-			// Review content
-			echo '<div class="review-content">';
-			echo wpautop(wp_kses_post($review->comment_content));
-			echo '</div>';
+                    echo '</div>';
+                }
+                echo '</div>';
+            }
 
-			// Display replies if any exist
-			if (!empty($thread['replies'])) {
-				echo '<div class="review-replies">';
-				foreach ($thread['replies'] as $reply) {
-					echo '<div class="review-reply">';
-					echo '<div class="reply-header">';
-					echo '<strong class="reply-author">' . esc_html($reply->comment_author);
-					if (user_can(get_user_by('login', $reply->comment_author)->ID, 'manage_options')) {
-						echo ' <span class="shop-owner-badge">Shop Owner</span>';
-					}
-					echo '</strong>';
-					echo '<span class="reply-date">' . esc_html(human_time_diff(strtotime($reply->comment_date))) . ' ago</span>';
-					echo '</div>';
-					echo '<div class="reply-content">';
-					echo wpautop(wp_kses_post($reply->comment_content));
-					echo '</div>';
-					echo '</div>';
-				}
-				echo '</div>';
-			}
+            echo '</div>';
+        }
 
-			echo '</div>';
-		}
+        echo '</div>';
 
-		echo '</div>';
+        // Add some basic styling
+        ?>
+        <style>
+        .product-reviews-wrapper {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
 
-		// Add some basic styling
-		?>
-		<style>
-			.product-reviews-wrapper {
-				margin: 20px 0;
-			}
-			.average-rating {
-				margin-bottom: 30px;
-				text-align: center;
-			}
-			.review-item {
-				border-bottom: 1px solid #eee;
-				padding: 15px 0;
-			}
-			.review-header {
-				margin-bottom: 10px;
-			}
-			.review-author {
-				margin-right: 10px;
-			}
-			.review-date {
-				color: #777;
-				font-size: 0.9em;
-			}
-			.woocommerce-Reviews-title {
-				margin-bottom: 20px;
-			}
-			.rating-text {
-				margin-left: 10px;
-				color: #666;
-			}
-			.review-replies {
-				margin-left: 30px;
-				margin-top: 15px;
-				border-left: 2px solid #f0f0f0;
-				padding-left: 20px;
-			}
-			.review-reply {
-				background: #f9f9f9;
-				padding: 15px;
-				margin-bottom: 10px;
-				border-radius: 4px;
-			}
-			.reply-header {
-				margin-bottom: 8px;
-			}
-			.reply-author {
-				margin-right: 10px;
-			}
-			.reply-date {
-				color: #777;
-				font-size: 0.9em;
-			}
-			.shop-owner-badge {
-				background: #4CAF50;
-				color: white;
-				padding: 2px 8px;
-				border-radius: 3px;
-				font-size: 0.8em;
-				margin-left: 5px;
-			}
-			.reply-content p {
-				margin: 0;
-			}
+        .woocommerce-Reviews-title {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .average-rating {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .rating-text {
+            margin-left: 10px;
+        }
+
+        .review-item {
+            background: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .review-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .review-author {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .review-date {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .review-content {
+            margin-bottom: 20px;
+        }
+
+        .review-replies {
+            padding-left: 20px;
+        }
+
+        .review-reply {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+        }
+
+        .reply-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .reply-author {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .shop-owner-badge {
+            background: #28a745;
+            color: #fff;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        .reply-date {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .reply-content {
+            margin-bottom: 0;
+        }
 		</style>
-		<?php
-	} else {
-		// Additional debug information
-		if (current_user_can('manage_options')) {
-			echo '<!-- No reviews found in direct database query -->';
-			// Show the SQL query for debugging
-			echo '<!-- SQL Query: ' . $wpdb->last_query . ' -->';
-		}
-		echo '<p>No reviews yet. Be the first to review this product!</p>';
-	}
+	<?php
 
-	// Return the buffered content
-	return ob_get_clean();
+    return ob_get_clean();
 }
-add_shortcode('product_reviews', 'custom_product_reviews_shortcode');
+
+function get_thread_replies($wpdb, $review) {
+    return array(
+        'replies' => $wpdb->get_results($wpdb->prepare("
+            SELECT c.*
+            FROM $wpdb->comments c
+            WHERE c.comment_post_ID = %d
+            AND c.comment_approved = '1'
+            AND c.comment_parent = %d
+            ORDER BY c.comment_date ASC
+        ", $review->comment_post_ID, $review->comment_ID)),
+    );
+}
+
+function render_review_header($review, $rating) {
+    echo '<div class="review-header">';
+    if ($rating) {
+        echo wc_get_rating_html($rating);
+    }
+    echo '<strong class="review-author">' . esc_html($review->comment_author) . '</strong>';
+    echo '<span class="review-date">' . esc_html(human_time_diff(strtotime($review->comment_date))) . ' ago</span>';
+    echo '</div>';
+}
+
+function render_review_content($content) {
+    echo '<div class="review-content">';
+    echo wpautop(wp_kses_post($content));
+    echo '</div>';
+}
+
+function render_reply_header($reply) {
+    $is_shop_owner = user_can(get_user_by('login', $reply->comment_author)->ID, 'manage_options');
+    echo '<div class="reply-header">';
+    echo '<strong class="reply-author">' . esc_html($reply->comment_author);
+    if ($is_shop_owner) {
+        echo ' <span class="shop-owner-badge">Shop Owner</span>';
+    }
+    echo '</strong>';
+    echo '<span class="reply-date">' . esc_html(human_time_diff(strtotime($reply->comment_date))) . ' ago</span>';
+    echo '</div>';
+}
+
+function render_reply_content($content) {
+    echo '<div class="reply-content">';
+    echo wpautop(wp_kses_post($content));
+    echo '</div>';
+}
 
 /**
  * Optional: Add review submission form
