@@ -1,6 +1,6 @@
 /*
 *
- * Version: 1.1.3
+ * Version: 1.1.4
  * Author: Fabien Butazzi (@fabienb)
  * Author URI: https://fabienb.blog
  * Add this code to your theme's functions.php or a custom plugin file or snippets plugin
@@ -22,23 +22,10 @@ function custom_product_reviews_shortcode() {
     }
 
     $product_id = $product->get_id();
-
-    // Fetch reviews and replies directly from the database
-    $reviews = $wpdb->get_results($wpdb->prepare("
-        SELECT c.*
-        FROM $wpdb->comments c
-        WHERE c.comment_post_ID = %d
-        AND c.comment_approved = '1'
-        AND c.comment_type = 'review'
-        ORDER BY c.comment_date DESC
-    ", $product_id));
+    $reviews = fetch_reviews($wpdb, $product_id);
 
     if (empty($reviews)) {
-        if (current_user_can('manage_options')) {
-            echo '<!-- No reviews found in direct database query -->';
-            echo '<!-- SQL Query: ' . esc_html($wpdb->last_query) . ' -->';
-        }
-        echo '<p>No reviews yet. Be the first to review this product!</p>';
+        handle_no_reviews();
         return;
     }
 
@@ -46,41 +33,21 @@ function custom_product_reviews_shortcode() {
     ?>
     <div class="product-reviews-wrapper">
         <?php
-        // Display average rating and number of reviews
-        $average_rating = $product->get_average_rating();
-        echo '<h2 class="woocommerce-Reviews-title">Product Reviews</h2>';
-        if ($average_rating) {
-            echo '<div class="average-rating">';
-            echo wc_get_rating_html($average_rating);
-            echo '<span class="rating-text">' . sprintf(_n('(%s rating)', '(%s ratings)', $product->get_review_count(), 'woocommerce'), esc_html($product->get_review_count())) . '</span>';
-            echo '</div>';
-        }
-
-        // Display each review
+        display_average_rating($product);
         foreach ($reviews as $review) {
             $thread = get_thread_replies($wpdb, $review);
             $rating = get_comment_meta($review->comment_ID, 'rating', true);
 
             echo '<div class="review-item">';
-
-            // Render Review Header
             render_review_header($review, $rating);
-
-            // Render Review Content
             render_review_content($review->comment_content);
 
-            // Display replies if any exist
             if (!empty($thread['replies'])) {
                 echo '<div class="review-replies">';
                 foreach ($thread['replies'] as $reply) {
                     echo '<div class="review-reply">';
-
-                    // Render Reply Header
                     render_reply_header($reply);
-
-                    // Render Reply Content
                     render_reply_content($reply->comment_content);
-
                     echo '</div>';
                 }
                 echo '</div>';
@@ -88,106 +55,43 @@ function custom_product_reviews_shortcode() {
 
             echo '</div>';
         }
-
-        echo '</div>';
-
-        // Add some basic styling
         ?>
-        <style>
-        .product-reviews-wrapper {
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .woocommerce-Reviews-title {
-            font-size: 24px;
-            margin-bottom: 15px;
-        }
-
-        .average-rating {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .rating-text {
-            margin-left: 10px;
-        }
-
-        .review-item {
-            background: #fff;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-
-        .review-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .review-author {
-            font-weight: bold;
-            margin-right: 10px;
-        }
-
-        .review-date {
-            color: #888;
-            font-size: 14px;
-        }
-
-        .review-content {
-            margin-bottom: 20px;
-        }
-
-        .review-replies {
-            padding-left: 20px;
-        }
-
-        .review-reply {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-        }
-
-        .reply-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .reply-author {
-            font-weight: bold;
-            margin-right: 10px;
-        }
-
-        .shop-owner-badge {
-            background: #28a745;
-            color: #fff;
-            padding: 3px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-left: 5px;
-        }
-
-        .reply-date {
-            color: #888;
-            font-size: 14px;
-        }
-
-        .reply-content {
-            margin-bottom: 0;
-        }
-		</style>
-	<?php
-
+    </div>
+    <?php
+    add_basic_styling();
     return ob_get_clean();
+}
+
+function fetch_reviews($wpdb, $product_id) {
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT c.*
+        FROM $wpdb->comments c
+        WHERE c.comment_post_ID = %d
+        AND c.comment_approved = '1'
+        AND c.comment_type = 'review'
+        ORDER BY c.comment_date DESC
+    ", $product_id));
+}
+
+function handle_no_reviews() {
+    if (current_user_can('manage_options')) {
+        echo '<!-- No reviews found in direct database query -->';
+        echo '<!-- SQL Query: ' . esc_html($wpdb->last_query) . ' -->';
+    }
+    echo '<p>No reviews yet. Be the first to review this product!</p>';
+}
+
+function display_average_rating($product) {
+    $average_rating = $product->get_average_rating();
+    if ($average_rating) {
+        echo '<h2 class="woocommerce-Reviews-title">Product Reviews</h2>';
+        echo '<div class="average-rating">';
+        echo wc_get_rating_html($average_rating);
+        echo '<span class="rating-text">' . sprintf(_n('(%s rating)', '(%s ratings)', $product->get_review_count(), 'woocommerce'), esc_html($product->get_review_count())) . '</span>';
+        echo '</div>';
+    } else {
+        echo '<h2 class="woocommerce-Reviews-title">Product Reviews</h2>';
+    }
 }
 
 function get_thread_replies($wpdb, $review) {
@@ -236,6 +140,104 @@ function render_reply_content($content) {
     echo wpautop(wp_kses_post($content));
     echo '</div>';
 }
+
+function add_basic_styling() {
+    ?>
+    <style>
+    .product-reviews-wrapper {
+        background: #f9f9f9;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .woocommerce-Reviews-title {
+        font-size: 24px;
+        margin-bottom: 15px;
+    }
+
+    .average-rating {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .rating-text {
+        margin-left: 10px;
+    }
+
+    .review-item {
+        background: #fff;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .review-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .review-author {
+        font-weight: bold;
+        margin-right: 10px;
+    }
+
+    .review-date {
+        color: #888;
+        font-size: 14px;
+    }
+
+    .review-content {
+        margin-bottom: 20px;
+    }
+
+    .review-replies {
+        padding-left: 20px;
+    }
+
+    .review-reply {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+    }
+
+    .reply-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .reply-author {
+        font-weight: bold;
+        margin-right: 10px;
+    }
+
+    .shop-owner-badge {
+        background: #28a745;
+        color: #fff;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-left: 5px;
+    }
+
+    .reply-date {
+        color: #888;
+        font-size: 14px;
+    }
+
+    .reply-content {
+        margin-bottom: 0;
+    }
+    </style>
+    <?php
+}
+
 
 /**
  * Optional: Add review submission form
