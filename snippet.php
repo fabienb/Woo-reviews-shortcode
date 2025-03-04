@@ -1,13 +1,13 @@
 /*
 *
- * Version: 1.1.4
+ * Version: 1.1.5
  * Author: Fabien Butazzi (@fabienb)
  * Author URI: https://fabienb.blog
  * Add this code to your theme's functions.php or a custom plugin file or snippets plugin
  */
 
 if (!defined('ABSPATH')) {
-	exit; // Exit if accessed directly
+    exit; // Exit if accessed directly
 }
 
 /**
@@ -15,14 +15,13 @@ if (!defined('ABSPATH')) {
  */
 function custom_product_reviews_shortcode() {
     global $product;
-    global $wpdb;
 
     if (!$product) {
         return '';
     }
 
     $product_id = $product->get_id();
-    $reviews = fetch_reviews($wpdb, $product_id);
+    $reviews = fetch_reviews($product_id);
 
     if (empty($reviews)) {
         handle_no_reviews();
@@ -35,7 +34,7 @@ function custom_product_reviews_shortcode() {
         <?php
         display_average_rating($product);
         foreach ($reviews as $review) {
-            $thread = get_thread_replies($wpdb, $review);
+            $thread = get_thread_replies($review);
             $rating = get_comment_meta($review->comment_ID, 'rating', true);
 
             echo '<div class="review-item">';
@@ -62,7 +61,9 @@ function custom_product_reviews_shortcode() {
     return ob_get_clean();
 }
 
-function fetch_reviews($wpdb, $product_id) {
+function fetch_reviews($product_id) {
+    global $wpdb; // Ensure $wpdb is available here
+
     return $wpdb->get_results($wpdb->prepare("
         SELECT c.*
         FROM $wpdb->comments c
@@ -74,6 +75,8 @@ function fetch_reviews($wpdb, $product_id) {
 }
 
 function handle_no_reviews() {
+    global $wpdb; // Ensure $wpdb is available here
+
     if (current_user_can('manage_options')) {
         echo '<!-- No reviews found in direct database query -->';
         echo '<!-- SQL Query: ' . esc_html($wpdb->last_query) . ' -->';
@@ -94,7 +97,9 @@ function display_average_rating($product) {
     }
 }
 
-function get_thread_replies($wpdb, $review) {
+function get_thread_replies($review) {
+    global $wpdb; // Ensure $wpdb is available here
+
     return array(
         'replies' => $wpdb->get_results($wpdb->prepare("
             SELECT c.*
@@ -124,7 +129,16 @@ function render_review_content($content) {
 }
 
 function render_reply_header($reply) {
-    $is_shop_owner = user_can(get_user_by('login', $reply->comment_author)->ID, 'manage_options');
+    // Check if the reply author is a registered user
+    $user = get_user_by('login', $reply->comment_author);
+
+    // If no user found, assume it's a guest review or another non-user authored comment.
+    if ($user) {
+        $is_shop_owner = user_can($user->ID, 'manage_options');
+    } else {
+        $is_shop_owner = false;
+    }
+
     echo '<div class="reply-header">';
     echo '<strong class="reply-author">' . esc_html($reply->comment_author);
     if ($is_shop_owner) {
@@ -134,6 +148,7 @@ function render_reply_header($reply) {
     echo '<span class="reply-date">' . esc_html(human_time_diff(strtotime($reply->comment_date))) . ' ago</span>';
     echo '</div>';
 }
+
 
 function render_reply_content($content) {
     echo '<div class="reply-content">';
@@ -238,7 +253,6 @@ function add_basic_styling() {
     <?php
 }
 
-
 /**
  * Optional: Add review submission form
  */
@@ -283,7 +297,8 @@ function has_purchased_product($product_id) {
 }
 
 function has_already_reviewed($product_id) {
-    global $wpdb;
+    global $wpdb; // Ensure $wpdb is available here
+
     $current_user = wp_get_current_user();
     $has_reviewed = $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(*)
@@ -292,6 +307,7 @@ function has_already_reviewed($product_id) {
         AND user_id = %d
         AND comment_type = 'review'
     ", $product_id, $current_user->ID));
+
     return $has_reviewed > 0;
 }
 
@@ -336,111 +352,109 @@ function generate_review_form($product_id) {
 }
 
 function add_form_styling() {
-	?>
-	<style>
-	.woocommerce-review-form-wrapper {
-		max-width: 800px;
-		margin: 2em 0;
-		padding: 20px;
-		background: #f8f8f8;
-		border-radius: 4px;
-	}
-	.comment-form-rating {
-		margin: 1em 0;
-	}
-	.comment-form-rating select {
-		display: block;
-		margin-top: 5px;
-	}
-	.comment-form-comment textarea {
-		width: 100%;
-		margin-top: 5px;
-	}
-	.required {
-		color: red;
-	}
-	.form-submit {
-		margin-top: 1em;
-	}
-	.submit.button {
-		background: #2c2d33;
-		color: #fff;
-		padding: 10px 20px;
-		border: none;
-		border-radius: 3px;
-		cursor: pointer;
-	}
-	.submit.button:hover {
-		background: #3e4046;
-	}
-	</style>
-	<?php
+    ?>
+    <style>
+    .woocommerce-review-form-wrapper {
+        max-width: 800px;
+        margin: 2em 0;
+        padding: 20px;
+        background: #f8f8f8;
+        border-radius: 4px;
+    }
+    .comment-form-rating {
+        margin: 1em 0;
+    }
+    .comment-form-rating select {
+        display: block;
+        margin-top: 5px;
+    }
+    .comment-form-comment textarea {
+        width: 100%;
+        margin-top: 5px;
+    }
+    .required {
+        color: red;
+    }
+    .form-submit {
+        margin-top: 1em;
+    }
+    .submit.button {
+        background: #2c2d33;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    .submit.button:hover {
+        background: #3e4046;
+    }
+    </style>
+    <?php
 }
-
 
 /**
  * Handle the review form submission
  */
 function handle_review_submission() {
-	if (!is_valid_review_submission()) {
-		return;
-	}
+    if (!is_valid_review_submission()) {
+        return;
+    }
 
-	$product_id = intval($_POST['comment_post_ID']);
-	$user = wp_get_current_user();
-	$rating = intval($_POST['rating']);
-	$comment = wp_kses_post($_POST['comment']);
+    $product_id = intval($_POST['comment_post_ID']);
+    $user = wp_get_current_user();
+    $rating = intval($_POST['rating']);
+    $comment = wp_kses_post($_POST['comment']);
 
-	if (!user_can_review($user, $product_id)) {
-		wp_die('You must purchase this product to review it.', 'Error', array('back_link' => true));
-		return;
-	}
+    if (!user_can_review($user, $product_id)) {
+        wp_die('You must purchase this product to review it.', 'Error', array('back_link' => true));
+        return;
+    }
 
-	$comment_id = insert_review_comment($product_id, $user, $comment);
-	if ($comment_id) {
-		add_comment_meta($comment_id, 'rating', $rating);
-		update_product_rating($product_id);
-		redirect_to_product($product_id);
-	}
+    $comment_id = insert_review_comment($product_id, $user, $comment);
+    if ($comment_id) {
+        add_comment_meta($comment_id, 'rating', $rating);
+        update_product_rating($product_id);
+        redirect_to_product($product_id);
+    }
 }
 
 function is_valid_review_submission() {
-	return isset($_POST['review_nonce']) && wp_verify_nonce($_POST['review_nonce'], 'submit_review') &&
-		is_user_logged_in() && !empty($_POST['comment']) && !empty($_POST['rating']) && !empty($_POST['comment_post_ID']);
+    return isset($_POST['review_nonce']) && wp_verify_nonce($_POST['review_nonce'], 'submit_review') &&
+        is_user_logged_in() && !empty($_POST['comment']) && !empty($_POST['rating']) && !empty($_POST['comment_post_ID']);
 }
 
 function user_can_review($user, $product_id) {
-	return wc_customer_bought_product($user->user_email, $user->ID, $product_id);
+    return wc_customer_bought_product($user->user_email, $user->ID, $product_id);
 }
 
 function insert_review_comment($product_id, $user, $comment) {
-	$comment_data = array(
-		'comment_post_ID' => $product_id,
-		'comment_author' => $user->display_name,
-		'comment_author_email' => $user->user_email,
-		'comment_author_url' => '',
-		'comment_content' => $comment,
-		'comment_type' => 'review',
-		'comment_parent' => 0,
-		'user_id' => $user->ID,
-		'comment_approved' => 1,
-	);
-	return wp_insert_comment($comment_data);
+    $comment_data = array(
+        'comment_post_ID' => $product_id,
+        'comment_author' => $user->display_name,
+        'comment_author_email' => $user->user_email,
+        'comment_author_url' => '',
+        'comment_content' => $comment,
+        'comment_type' => 'review',
+        'comment_parent' => 0,
+        'user_id' => $user->ID,
+        'comment_approved' => 1,
+    );
+    return wp_insert_comment($comment_data);
 }
 
 function update_product_rating($product_id) {
-	$product = wc_get_product($product_id);
-	if ($product) {
-		$product->set_average_rating(null); // Trigger recalculation
-		$product->save();
-	}
+    $product = wc_get_product($product_id);
+    if ($product) {
+        $product->set_average_rating(null); // Trigger recalculation
+        $product->save();
+    }
 }
 
 function redirect_to_product($product_id) {
-	wp_safe_redirect(get_permalink($product_id));
-	exit;
+    wp_safe_redirect(get_permalink($product_id));
+    exit;
 }
-
 
 // Add shortcodes
 add_shortcode('product_reviews', 'custom_product_reviews_shortcode');
