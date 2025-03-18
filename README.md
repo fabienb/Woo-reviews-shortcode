@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # WooCommerce Reviews shortcodes
 
 ![Latest Version](https://img.shields.io/badge/release-v1.1.5-orange)
@@ -8,6 +9,11 @@
 ## Description
 
 I had an issue with WooCommerce and the configuration of the theme I was using (Ohio by Colabrio, via Themeforest) that somehow prevented Customer Reviews from appearing in the Product pages.
+=======
+# Woo Reviews shortcode
+
+I had an issue with WooCommerce and the configuration of the theme I was using (Ohio by Colabrio, via Themeforest) that somehow prevented Customer Reviews from appearing in Products.
+>>>>>>> 10c04d2843dab37443d1f86200a175a71b563e5f
 I decided to retrieve the reviews from the database and then create a shortcode to display those reviews in a custom tab. 
 
 This is the PHP that creates such shortcode. 
