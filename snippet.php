@@ -1,9 +1,13 @@
-/*
-*
+<?php
+
+/**
+ * Snippet Name: Woo Reviews Shortcodes
+ * Plugin URI: https://fabienb.blog
+ * Description: Shows Customer Reviews in WooCommerce on themes that do not support them (via shortcodes). Add this code to your theme's functions.php or a custom plugin file or snippets plugin.
  * Version: 1.1.5
- * Author: Fabien Butazzi (@fabienb)
+ * Author: Fabien Butazzi, improved and validated by Qwen 2.5 Coder 32B and Gemma 3 27B
  * Author URI: https://fabienb.blog
- * Add this code to your theme's functions.php or a custom plugin file or snippets plugin
+ * Text Domain: fabienb
  */
 
 if (!defined('ABSPATH')) {
